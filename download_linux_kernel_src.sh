@@ -15,7 +15,7 @@ function show_syntax () {
   echo "This script will download sunxi linux kernel source code from internet."
   echo 
   echo "The syntax:"
-  echo "$1  cb1|cb2|cb3  fast|full  output_dir "
+  echo "$1  cb1|cb2|cb3|cb4  fast|full  output_dir "
   echo
 }
 
@@ -57,6 +57,9 @@ case $board_type in
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi -b sunxi-3.4-ct-v101"
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi -b sunxi-3.4-ct-dev"
         kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
+        ;;
+    cb4 )
+        kernel_src_path="https://github.com/cubieboard/CC-A80-kernel-source.git"
         ;;
     *)
         echo "Unknown Board Type"

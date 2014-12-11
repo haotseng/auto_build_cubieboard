@@ -138,6 +138,8 @@ if [ -f ${work_dir}/firmware.tar.gz ]; then
     tar -zxvf ${work_dir}/firmware.tar.gz
 fi
 
+sync
+
 cd $curr_dir
 sleep 3
 umount $bootfs

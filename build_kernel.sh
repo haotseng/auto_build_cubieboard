@@ -4,11 +4,15 @@
 #
 # you need at least
 # apt-get install uboot-mkimage
-# And ARM GNU toolchain arm-linux-gnueabihf-xxx
+# ARM GNU cross compile toolchain
 THIS_SCRIPT=`echo $0 | sed "s/^.*\///"`
 SCRIPT_PATH=`echo $0 | sed "s/\/${THIS_SCRIPT}$//"`
 work_dir=`pwd`/_build_tmp
 curr_dir=`pwd`
+
+#ARM_CROSS_COMPILER_PREFIX=arm-linux-gnueabihf-
+ARM_CROSS_COMPILER_PREFIX=arm-linux-gnueabi-
+
 
 #
 # Arguments process
@@ -18,10 +22,10 @@ function show_syntax () {
   echo "This script will build linux kernel from source code"
   echo "It can build for Cubieboard1, Cubieboard2 or Cubieboard3(CubieTruck)"
   echo "Before you run this script, please make sure you already install uboot-mkimage packages,"
-  echo "and ARM GNU toolchain arm-linux-gnueabihf-xxx"
+  echo "and ARM GNU cross compile toolchain"
   echo 
   echo "The syntax:"
-  echo "$1  cb1|cb2|cb3 kernel_src_dir output_dir extra_fw_tgz_file [new_config_file]"
+  echo "$1  cb1|cb2|cb3|cb4 kernel_src_dir output_dir extra_fw_tgz_file [new_config_file]"
   echo
 }
 
@@ -37,7 +41,7 @@ if [ $EUID -ne 0 ]; then
   exit_process 1
 fi
 
-if [ $# -lt 3 ]; then
+if [ $# -lt 4 ]; then
     show_syntax $0
     exit_process 1
 fi
@@ -95,6 +99,18 @@ case $board_type in
             def_config=sun7i_defconfig
         fi
         ;;
+    cb4 )
+        # sun7i_defconfig ==> original default config for A20
+        # hao_cb3_defconfig ==> The modified setting for my board
+        def_config=hao_cb4_defconfig
+        if [ -f ${SCRIPT_PATH}/${def_config} ]; then
+            rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
+            cp ${SCRIPT_PATH}/${def_config} ${kernel_dir}/arch/arm/configs
+        else
+            def_config=sun9iw1p1smp_defconfig
+        fi
+        ;;
+
     *)
         echo "Unknown Board Type"
         exit_process 1
@@ -102,13 +118,17 @@ case $board_type in
 esac
 echo "Set kernel config file name : ${def_config}"
 
+if [ "x$output_dir" == "x" ]; then
+    echo "Can't generate output directory!"
+    exit_process 1
+fi
 mkdir -p $output_dir
 
 cd $kernel_dir
 echo "Make kernel mrproper"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- mrproper 
+make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX mrproper 
 echo "Make kernel $def_config"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- $def_config
+make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX $def_config
 cd $curr_dir
 if [ "$update_config_file" != "" ]; then 
     if [ -f $update_config_file ]; then
@@ -119,9 +139,9 @@ if [ "$update_config_file" != "" ]; then
 fi
 cd $kernel_dir
 echo "Make kernel uImage modules"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j4 uImage modules
+make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX -j4 uImage modules
 echo "Make kernel modules_install"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- INSTALL_MOD_PATH=output modules_install
+make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX INSTALL_MOD_PATH=output modules_install
 
 cd $curr_dir
 if [ ! -d ${kernel_dir}/output/lib/modules ]; then
@@ -145,6 +165,7 @@ fi
 
 cd $curr_dir
 rm -rf ${output_dir}/*
+
 mv ${kernel_dir}/output/lib/modules.tar.gz ${output_dir}
 if [ -f ${kernel_dir}/output/lib/firmware.tar.gz ]; then
     mv ${kernel_dir}/output/lib/firmware.tar.gz ${output_dir}

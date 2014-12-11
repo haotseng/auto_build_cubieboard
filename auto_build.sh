@@ -12,10 +12,10 @@ curr_dir=`pwd`
 function show_syntax () {
   echo 
   echo "This script will auto download all source code and build linux kernel and uboot from source code"
-  echo "It can build for Cubieboard1, Cubieboard2 or Cubieboard3(CubieTruck)"
+  echo "It can build for Cubieboard1, Cubieboard2, Cubieboard3(CubieTruck) or Cubieboard4(CC-A80)"
   echo 
   echo "The syntax:"
-  echo "$1  cb1|cb2|cb3 [kernel_config_file]"
+  echo "$1  cb1|cb2|cb3|cb4 [kernel_config_file]"
   echo
 }
 
@@ -55,6 +55,10 @@ case $board_type in
         extra_fw_tgz_file="${curr_dir}/extra_fw.tgz"
         #extra_fw_tgz_file="${curr_dir}/cb3_extra_fw.tgz"
         ;;
+    cb4 )
+        output_dir=./output_cb4
+        extra_fw_tgz_file="${curr_dir}/extra_fw.tgz"
+        ;;
     *)
         echo "Unknown Board Type"
         exit_process 1
@@ -78,7 +82,7 @@ mkdir -p $src_dir
 mkdir -p $output_dir
 
 #
-# Download source code
+# Download linux kernel source code from internet
 #
 if [ ! -d $kernel_src ]; then
     echo "[Downloading Linux Source code..]"
@@ -89,15 +93,25 @@ if [ ! -d $kernel_src ]; then
     fi
 fi
 
-if [ ! -d $uboot_src ]; then
-    echo "[Downloading UBOOT Source code..]"
-    ./download_uboot_src.sh fast $uboot_src
-    if [ $? -ne 0 ]; then
-        echo "!!! Download uboot srouce code error !!!"
-        exit_process 1
+#
+# Download uboot source code form internet
+# The Cubieboard4(CC-A80) doesn't have source code, yet.
+# We only have binary file for it.
+#
+if [ "x$board_type" != "xcb4" ]; then
+    if [ ! -d $uboot_src ]; then
+        echo "[Downloading UBOOT Source code..]"
+        ./download_uboot_src.sh fast $uboot_src
+        if [ $? -ne 0 ]; then
+            echo "!!! Download uboot srouce code error !!!"
+            exit_process 1
+        fi
     fi
 fi
 
+#
+# Download board config file for uboot from internet
+#
 if [ ! -d $sunxi_board_conf_src ]; then
     echo "[Downloading SUNXI Board Config Source code..]"
     ./download_sunxi_board_src.sh fast $sunxi_board_conf_src
@@ -138,11 +152,16 @@ fi
 #
 # Build Uboot
 #
-echo "[Building UBoot..]"
-./build_uboot.sh $board_type $uboot_src $sunxi_board_conf_src $sunxi_tool_src $uboot_output
-if [ $? -ne 0 ]; then
-    echo "!!! Build UBOOT error !!!"
-    exit_process 1
+if [ "x$board_type" == "xcb4" ]; then
+    echo "[Copy UBoot binary..]"
+    ./cb4_prepare_uboot.sh ./cb4_uboot_bin $uboot_output
+else
+    echo "[Building UBoot..]"
+    ./build_uboot.sh $board_type $uboot_src $sunxi_board_conf_src $sunxi_tool_src $uboot_output
+    if [ $? -ne 0 ]; then
+        echo "!!! Build UBOOT error !!!"
+        exit_process 1
+    fi
 fi
 
 echo "Done"

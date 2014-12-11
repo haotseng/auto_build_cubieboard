@@ -135,12 +135,21 @@ echo "Begin update the uboot files.."
 
 mount $bootp $bootfs
 
+#
+# Here, you can copy some files into u-Boot partition
+#
+# Begin here ==>
+
 rm -rf ${bootfs}/boot.cmd
 cp ${uboot_dir}/boot.cmd $bootfs
 rm -rf ${bootfs}/boot.scr
 cp ${uboot_dir}/boot.scr $bootfs
 rm -rf ${bootfs}/script.bin
 cp ${uboot_dir}/script.bin $bootfs
+
+# <== End
+
+sync
 
 sleep 3
 umount $bootfs
@@ -165,6 +174,8 @@ fi
 
 dd if=${uboot_dir}/sunxi-spl.bin of=$device bs=1024 seek=8
 dd if=${uboot_dir}/u-boot.img of=$device bs=1024 seek=40
+
+sync
 
 if [ "$dev_type" == "img" ]; then
     sleep 3

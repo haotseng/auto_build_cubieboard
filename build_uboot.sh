@@ -151,8 +151,13 @@ if [ ! -d $board_cfg_src ]; then
 fi
 
 mkdir -p $work_dir
-mkdir -p $output_dir
-rm -rf ${output_dir}/*
+if [ "x$output_dir" != "x" ]; then
+    mkdir -p $output_dir
+    rm -rf ${output_dir}/*
+else
+    echo "Can't generate output directory!"
+    exit_process 1
+fi
 
 #
 # Build UBoot
