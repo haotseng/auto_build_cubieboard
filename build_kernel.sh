@@ -100,8 +100,8 @@ case $board_type in
         fi
         ;;
     cb4 )
-        # sun7i_defconfig ==> original default config for A20
-        # hao_cb3_defconfig ==> The modified setting for my board
+        # sun9iw1p1smp_defconfig ==> original default config for A80
+        # hao_cb4_defconfig ==> The modified setting for my board
         def_config=hao_cb4_defconfig
         if [ -f ${SCRIPT_PATH}/${def_config} ]; then
             rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
