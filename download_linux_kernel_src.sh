@@ -60,6 +60,7 @@ case $board_type in
         ;;
     cb4 )
         kernel_src_path="https://github.com/cubieboard/CC-A80-kernel-source.git"
+        kernel_patch_file=${curr_dir}/cb4_kernel.patch
         ;;
     *)
         echo "Unknown Board Type"
@@ -84,3 +85,9 @@ case $download_type in
 esac
 
 git clone $git_depth $kernel_src_path $output_dir
+
+if [ "x$board_type" == "xcb4" ]; then
+    cd $output_dir
+    patch -p1 < $kernel_patch_file
+    cd $curr_dir
+fi

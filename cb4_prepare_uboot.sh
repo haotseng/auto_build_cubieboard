@@ -67,17 +67,17 @@ fi
 #cp ${uboot_bin_dir}/u-boot-sun9iw1p1.bin ${output_dir}/u-boot.bin
 
 
-if [ ! -f ${uboot_bin_dir}/extract/boot0.bin ]; then
-    echo "Error !! Can't find ${uboot_bin_dir}/extract/boot0.bin file"
+if [ ! -f ${uboot_bin_dir}/extract/boot0_hdmi.bin ]; then
+    echo "Error !! Can't find ${uboot_bin_dir}/extract/boot0_hdmi.bin file"
     exit_process 1
 fi
-cp ${uboot_bin_dir}/extract/boot0.bin ${output_dir}/boot0.bin
+cp ${uboot_bin_dir}/extract/boot0_hdmi.bin ${output_dir}/boot0.bin
 
-if [ ! -f ${uboot_bin_dir}/extract/u-boot.bin ]; then
-    echo "Error !! Can't find ${uboot_bin_dir}/extract/u-boot.bin file"
+if [ ! -f ${uboot_bin_dir}/extract/u-boot_hdmi.bin ]; then
+    echo "Error !! Can't find ${uboot_bin_dir}/extract/u-boot_hdmi.bin file"
     exit_process 1
 fi
-cp ${uboot_bin_dir}/extract/u-boot.bin ${output_dir}/u-boot.bin
+cp ${uboot_bin_dir}/extract/u-boot_hdmi.bin ${output_dir}/u-boot.bin
 
 
 #
