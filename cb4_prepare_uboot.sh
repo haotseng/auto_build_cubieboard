@@ -54,73 +54,80 @@ fi
 #
 # Copy Uboot binary
 #
-#if [ ! -f ${uboot_bin_dir}/boot0_sdcard_sun9iw1p1.bin ]; then
-#    echo "Error !! Can't find ${uboot_bin_dir}/boot0_sdcard_sun9iw1p1.bin file"
-#    exit_process 1
-#fi
-#cp ${uboot_bin_dir}/boot0_sdcard_sun9iw1p1.bin ${output_dir}/boot0.bin
-#
-#if [ ! -f ${uboot_bin_dir}/u-boot-sun9iw1p1.bin ]; then
-#    echo "Error !! Can't find ${uboot_bin_dir}/u-boot-sun9iw1p1.bin file"
-#    exit_process 1
-#fi
-#cp ${uboot_bin_dir}/u-boot-sun9iw1p1.bin ${output_dir}/u-boot.bin
 
-
-if [ ! -f ${uboot_bin_dir}/extract/boot0_hdmi.bin ]; then
-    echo "Error !! Can't find ${uboot_bin_dir}/extract/boot0_hdmi.bin file"
+if [ ! -f ${uboot_bin_dir}/u-boot-spl.bin ]; then
+    echo "Error !! Can't find ${uboot_bin_dir}/u-boot-spl.bin file"
     exit_process 1
 fi
-cp ${uboot_bin_dir}/extract/boot0_hdmi.bin ${output_dir}/boot0.bin
+cp ${uboot_bin_dir}/u-boot-spl.bin ${output_dir}/boot0.bin
 
-if [ ! -f ${uboot_bin_dir}/extract/u-boot_hdmi.bin ]; then
-    echo "Error !! Can't find ${uboot_bin_dir}/extract/u-boot_hdmi.bin file"
+if [ ! -f ${uboot_bin_dir}/u-boot-sun9iw1p1.bin ]; then
+    echo "Error !! Can't find ${uboot_bin_dir}/u-boot-sun9iw1p1.bin file"
     exit_process 1
 fi
-cp ${uboot_bin_dir}/extract/u-boot_hdmi.bin ${output_dir}/u-boot.bin
+cp ${uboot_bin_dir}/u-boot-sun9iw1p1.bin ${output_dir}/u-boot.bin
 
 
 #
 # Convert fex file to bin
+# The 'fex' text file must be DOS format.
 #
-#board_mele_file=${uboot_bin_dir}/sys_config.fex
-#
-#if [ ! -f $board_mele_file ]; then
-#    echo "Error !! Can't find $board_mele_file file"
-#    exit_process 1
-#fi
-#cp $board_mele_file ${output_dir}/board_mele.fex
-#dos2unix ${output_dir}/board_mele.fex
-#
-#if [ ! -x ${uboot_bin_dir}/tools/script ]; then
-#    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/script"
-#    exit_process 1
-#fi
-#${uboot_bin_dir}/tools/script ${output_dir}/board_mele.fex
-#
-#if [ ! -f ${output_dir}/board_mele.bin ]; then
-#    echo "Error !! Can't generate ${output_dir}/board_mele.bin file "
-#    exit_process 1
-#fi
+board_mele_file=${uboot_bin_dir}/sys_config_hdmi.fex
+
+if [ ! -f $board_mele_file ]; then
+    echo "Error !! Can't find $board_mele_file file"
+    exit_process 1
+fi
+cp $board_mele_file ${output_dir}/board_mele.fex
+
+# convert to DOS format
+unix2dos ${output_dir}/board_mele.fex
+
+if [ ! -x ${uboot_bin_dir}/tools/script ]; then
+    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/script"
+    exit_process 1
+fi
+${uboot_bin_dir}/tools/script ${output_dir}/board_mele.fex
+
+if [ ! -f ${output_dir}/board_mele.bin ]; then
+    echo "Error !! Can't generate ${output_dir}/board_mele.bin file "
+    exit_process 1
+fi
 
 #
 # Patch boot0.bin
 #
-#if [ ! -x ${uboot_bin_dir}/tools/update_boot0 ]; then
-#    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_boot0"
-#    exit_process 1
-#fi
-#${uboot_bin_dir}/tools/update_boot0 ${output_dir}/boot0.bin ${output_dir}/board_mele.bin SDMMC_CARD
+if [ ! -x ${uboot_bin_dir}/tools/update_boot0 ]; then
+    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_boot0"
+    exit_process 1
+fi
+${uboot_bin_dir}/tools/update_boot0 ${output_dir}/boot0.bin ${output_dir}/board_mele.bin SDMMC_CARD
 
 #
 # Patch u-boot.bin
-#
-#if [ ! -x ${uboot_bin_dir}/tools/update_uboot ]; then
-#    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_uboot"
-#    exit_process 1
-#fi
-#${uboot_bin_dir}/tools/update_uboot ${output_dir}/u-boot.bin ${output_dir}/board_mele.bin
 
+if [ ! -x ${uboot_bin_dir}/tools/update_uboot ]; then
+    echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_uboot"
+    exit_process 1
+fi
+${uboot_bin_dir}/tools/update_uboot ${output_dir}/u-boot.bin ${output_dir}/board_mele.bin
+
+
+#
+# Generate uboot_sys_config_in_arm.tar.gz 
+#
+if [ ! -f ${uboot_bin_dir}/uboot_sys_config_in_arm.tar.gz ]; then
+    echo "Error !! Can't found  ${uboot_bin_dir}/uboot_sys_config_in_arm.tar.gz"
+    exit_process 1
+fi
+cp ${uboot_bin_dir}/uboot_sys_config_in_arm.tar.gz ${output_dir}/
+cd ${output_dir}
+tar -zxvf uboot_sys_config_in_arm.tar.gz
+rm -rf uboot_sys_config_in_arm.tar.gz
+cp board_mele.fex ./uboot_sys_config_in_arm/sys_config.fex
+tar -zcvf uboot_sys_config_in_arm.tar.gz uboot_sys_config_in_arm
+rm -rf uboot_sys_config_in_arm
+cd $curr_dir
 
 echo "Done"
 

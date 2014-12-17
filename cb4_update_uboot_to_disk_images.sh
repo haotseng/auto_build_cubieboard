@@ -61,6 +61,11 @@ if [ ! -f ${uboot_dir}/boot0.bin ]; then
     exit_process 1
 fi
 
+if [ ! -f ${uboot_dir}/uboot_sys_config_in_arm.tar.gz ]; then
+    echo "Can't found ${uboot_dir}/uboot_sys_config_in_arm.tar.gz"
+    exit_process 1
+fi
+
 mkdir -p $work_dir
 
 case "$dev_type" in
@@ -124,6 +129,9 @@ mount $bootp $bootfs
 # Here, you can copy some files into u-Boot partition
 #
 # Begin here ==>
+
+rm -rf ${bootfs}/uboot_sys_config_in_arm.tar.gz
+cp ${uboot_dir}/uboot_sys_config_in_arm.tar.gz ${bootfs}/
 
 # <== End
 

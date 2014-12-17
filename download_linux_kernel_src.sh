@@ -86,8 +86,3 @@ esac
 
 git clone $git_depth $kernel_src_path $output_dir
 
-if [ "x$board_type" == "xcb4" ]; then
-    cd $output_dir
-    patch -p1 < $kernel_patch_file
-    cd $curr_dir
-fi
