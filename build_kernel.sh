@@ -68,44 +68,40 @@ fi
 case $board_type in
     cb1 )
         # sun4i_defconfig ==> original default config for A10
-        # hao_cb1_defconfig ==> The modified setting for my board
-        def_config=hao_cb1_defconfig
-        if [ -f ${SCRIPT_PATH}/${def_config} ]; then
+        def_config=cb1_defconfig
+        if [ -f ${SCRIPT_PATH}/kernel_config/${def_config} ]; then
             rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
-            cp ${SCRIPT_PATH}/${def_config} ${kernel_dir}/arch/arm/configs
+            cp ${SCRIPT_PATH}/kernel_config/${def_config} ${kernel_dir}/arch/arm/configs
         else
             def_config=sun4i_defconfig
         fi
         ;;
     cb2 )
         # sun7i_defconfig ==> original default config for A20
-        # hao_cb2_defconfig ==> The modified setting for my board
-        def_config=hao_cb2_defconfig
-        if [ -f ${SCRIPT_PATH}/${def_config} ]; then
+        def_config=cb2_defconfig
+        if [ -f ${SCRIPT_PATH}/kernel_config/${def_config} ]; then
             rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
-            cp ${SCRIPT_PATH}/${def_config} ${kernel_dir}/arch/arm/configs
+            cp ${SCRIPT_PATH}/kernel_config/${def_config} ${kernel_dir}/arch/arm/configs
         else
             def_config=sun7i_defconfig
         fi
         ;;
     cb3 )
         # sun7i_defconfig ==> original default config for A20
-        # hao_cb3_defconfig ==> The modified setting for my board
-        def_config=hao_cb3_defconfig
-        if [ -f ${SCRIPT_PATH}/${def_config} ]; then
+        def_config=cb3_defconfig
+        if [ -f ${SCRIPT_PATH}/kernel_config/${def_config} ]; then
             rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
-            cp ${SCRIPT_PATH}/${def_config} ${kernel_dir}/arch/arm/configs
+            cp ${SCRIPT_PATH}/kernel_config/${def_config} ${kernel_dir}/arch/arm/configs
         else
             def_config=sun7i_defconfig
         fi
         ;;
     cb4 )
         # sun9iw1p1smp_defconfig ==> original default config for A80
-        # hao_cb4_defconfig ==> The modified setting for my board
-        def_config=hao_cb4_defconfig
-        if [ -f ${SCRIPT_PATH}/${def_config} ]; then
+        def_config=cb4_defconfig
+        if [ -f ${SCRIPT_PATH}/kernel_config/${def_config} ]; then
             rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
-            cp ${SCRIPT_PATH}/${def_config} ${kernel_dir}/arch/arm/configs
+            cp ${SCRIPT_PATH}/kernel_config/${def_config} ${kernel_dir}/arch/arm/configs
         else
             def_config=sun9iw1p1smp_defconfig
         fi
