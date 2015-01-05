@@ -10,12 +10,8 @@ SCRIPT_PATH=`echo $0 | sed "s/\/${THIS_SCRIPT}$//"`
 work_dir=`pwd`/_build_tmp
 curr_dir=`pwd`
 
-#ARM_CROSS_COMPILER_PREFIX=arm-linux-gnueabihf-
-ARM_CROSS_COMPILER_PREFIX=arm-linux-gnueabi-
-
-
 #
-# Arguments process
+# Functions
 #
 function show_syntax () {
   echo 
@@ -36,19 +32,42 @@ function exit_process () {
   exit $1
 }
 
+#
+# Decide the compiler
+#
+WORK_MACHINE=`uname -m`
+
+if [ "x$WORK_MACHINE" = "xarmv7l" ]; then
+    CROSS_COMPILE_OPTIONS=""
+    COMPILER_PREFIX=""
+else
+    #COMPILER_PREFIX=arm-linux-gnueabihf-
+    COMPILER_PREFIX=arm-linux-gnueabi-
+    
+    CROSS_COMPILE_OPTIONS="CROSS_COMPILE=$COMPILER_PREFIX"
+    
+fi
+
+which ${COMPILER_PREFIX}gcc
+if [ $? -ne 0 ]; then
+    echo "!!! Can't found ${COMPILER_PREFIX}gcc in your executable path !!!"
+    exit_process 1
+fi
+
+#
+# Check root right
+#
 if [ $EUID -ne 0 ]; then
   echo "this tool must be run as root"
   exit_process 1
 fi
 
+#
+# Check paramters
+#
 if [ $# -lt 4 ]; then
     show_syntax $0
     exit_process 1
-fi
-
-if [ -d $work_dir ]; then
-    echo "Working directory $work_dir exist, please remove it before run this script"
-    exit 1
 fi
 
 board_type=$1
@@ -56,6 +75,19 @@ kernel_dir=$2
 output_dir=$3
 extra_fw_file_tgz=$4
 update_config_file=$5
+
+
+#
+# Check working directory
+#
+if [ -d $work_dir ]; then
+    echo "Working directory $work_dir exist, please remove it before run this script"
+    exit 1
+fi
+
+#
+# Check kernel source 
+#
 
 if [ ! -d $kernel_dir ]; then
     echo "Can't found $kernel_dir"
@@ -122,9 +154,9 @@ mkdir -p $output_dir
 
 cd $kernel_dir
 echo "Make kernel mrproper"
-make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX mrproper 
+make ARCH=arm $CROSS_COMPILE_OPTIONS mrproper 
 echo "Make kernel $def_config"
-make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX $def_config
+make ARCH=arm $CROSS_COMPILE_OPTIONS $def_config
 cd $curr_dir
 if [ "$update_config_file" != "" ]; then 
     if [ -f $update_config_file ]; then
@@ -135,9 +167,9 @@ if [ "$update_config_file" != "" ]; then
 fi
 cd $kernel_dir
 echo "Make kernel uImage modules"
-make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX -j4 uImage modules
+make ARCH=arm $CROSS_COMPILE_OPTIONS -j4 uImage modules
 echo "Make kernel modules_install"
-make ARCH=arm CROSS_COMPILE=$ARM_CROSS_COMPILER_PREFIX INSTALL_MOD_PATH=output modules_install
+make ARCH=arm $CROSS_COMPILE_OPTIONS INSTALL_MOD_PATH=output modules_install
 
 cd $curr_dir
 if [ ! -d ${kernel_dir}/output/lib/modules ]; then

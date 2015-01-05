@@ -11,7 +11,7 @@ work_dir=`pwd`/_build_tmp
 curr_dir=`pwd`
 
 #
-# Arguments process
+# Functions
 #
 function show_syntax () {
   echo 
@@ -87,19 +87,43 @@ EOF
   mv ${mele_file}.tmp $mele_file
 }
 
+#
+# Decide the compiler
+#
+WORK_MACHINE=`uname -m`
+
+if [ "x$WORK_MACHINE" = "xarmv7l" ]; then
+    CROSS_COMPILE_OPTIONS=""
+    COMPILER_PREFIX=""
+else
+    #COMPILER_PREFIX=arm-linux-gnueabihf-
+    COMPILER_PREFIX=arm-linux-gnueabi-
+    
+    CROSS_COMPILE_OPTIONS="CROSS_COMPILE=$COMPILER_PREFIX"
+    
+fi
+
+which ${COMPILER_PREFIX}gcc
+if [ $? -ne 0 ]; then
+    echo "!!! Can't found ${COMPILER_PREFIX}gcc in your executable path !!!"
+    exit_process 1
+fi
+
+#
+# Check root right
+#
 if [ $EUID -ne 0 ]; then
   echo "this tool must be run as root"
   exit_process 1
 fi
 
+#
+# Check paramters
+#
+
 if [ $# -lt 5 ]; then
     show_syntax $0
     exit_process 1
-fi
-
-if [ -d $work_dir ]; then
-    echo "Working directory $work_dir exist, please remove it before run this script"
-    exit 1
 fi
 
 board_type=$1
@@ -107,6 +131,15 @@ uboot_dir=$2
 board_cfg_src=$3
 sunxi_tool_src=$4
 output_dir=$5
+
+#
+# Check working directory
+#
+
+if [ -d $work_dir ]; then
+    echo "Working directory $work_dir exist, please remove it before run this script"
+    exit 1
+fi
 
 #
 # Choose board config file
@@ -164,10 +197,10 @@ fi
 #
 cd $uboot_dir
 echo "Cleanup"
-make distclean CROSS_COMPILE=arm-linux-gnueabihf-
+make distclean $CROSS_COMPILE_OPTIONS
 echo "Build uboot"
-make ${uboot_board_type}_config CROSS_COMPILE=arm-linux-gnueabihf-
-make CROSS_COMPILE=arm-linux-gnueabihf-
+make ${uboot_board_type}_config $CROSS_COMPILE_OPTIONS
+make $CROSS_COMPILE_OPTIONS
 cd $curr_dir
 
 if [ ! -f ${uboot_dir}/spl/u-boot-spl.bin ]; then

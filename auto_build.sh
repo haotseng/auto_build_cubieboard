@@ -53,7 +53,6 @@ case $board_type in
     cb3 )
         output_dir=./output_cb3
         extra_fw_tgz_file="${curr_dir}/extra_fw.tgz"
-        #extra_fw_tgz_file="${curr_dir}/cb3_extra_fw.tgz"
         ;;
     cb4 )
         output_dir=./output_cb4

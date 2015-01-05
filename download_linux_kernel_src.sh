@@ -56,7 +56,8 @@ case $board_type in
     cb3 )
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi -b sunxi-3.4-ct-v101"
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi -b sunxi-3.4-ct-dev"
-        kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
+        #kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
+        kernel_src_path="https://github.com/linux-sunxi/linux-sunxi.git -b sunxi-3.4"
         ;;
     cb4 )
         kernel_src_path="https://github.com/cubieboard/CC-A80-kernel-source.git"
@@ -92,12 +93,13 @@ git clone $git_depth $kernel_src_path $output_dir
 #
 # Patch source code
 #
-kernel_patch_file=${board_type}_kernel_src.patch
-
-if [ -f ${curr_dir}/${kernel_patch_file} ]; then
+patch_dir=${curr_dir}/kernel_patch
+kernel_patches=`(cd ${patch_dir}; ls ${board_type}*.patch)`
+for patch_file in $kernel_patches
+do
     cd $output_dir
-    patch -p1 < ${curr_dir}/${kernel_patch_file}
+    patch -p1 < ${patch_dir}/${patch_file}
     cd ${curr_dir}
-fi
+done
 
 
