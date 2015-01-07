@@ -51,7 +51,8 @@ case $board_type in
         ;;
     cb2 )
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi"
-        kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
+        #kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
+        kernel_src_path="https://github.com/linux-sunxi/linux-sunxi.git -b sunxi-3.4"
         ;;
     cb3 )
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi -b sunxi-3.4-ct-v101"
