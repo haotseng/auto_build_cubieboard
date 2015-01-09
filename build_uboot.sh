@@ -162,6 +162,11 @@ case $board_type in
         uboot_board_type=Cubietruck
         board_mele_file=${board_cfg_src}/sys_config/a20/cubietruck.fex
         ;;
+    cb3-dev )
+        # Cubieboard3 ==> sun7i:CUBIEBOARD2,SPL,SUNXI_EMAC,STATUSLED=244
+        uboot_board_type=Cubietruck
+        board_mele_file=${board_cfg_src}/sys_config/a20/cubietruck.fex
+        ;;
     *)
         echo "Unknown Board Type"
         exit_process 1
@@ -255,7 +260,7 @@ cp $board_mele_file ${work_dir}/board_mele.fex
 
 added_dynamic_mac_address ${work_dir}/board_mele.fex
 
-if [ "$board_type" == "cb3" ]; then
+if [ "x$board_type" == "xcb3" ] || [ "x$board_type" == "xcb3-dev" ]; then
     added_cb3_wifi_gpio_settings ${work_dir}/board_mele.fex
 fi
 
@@ -283,11 +288,7 @@ fatload mmc 0 0x48000000 uImage
 bootm 0x48000000
 EOF
 
-if [ "$board_type" == "cb2" ]; then
-    echo "setenv machid 0x00000f35" >> boot.cmd
-fi
-
-if [ "$board_type" == "cb3" ]; then
+if [ "x$board_type" == "xcb2" ] || [ "x$board_type" == "xcb3" ] || [ "x$board_type" == "xcb3-dev" ]; then
     echo "setenv machid 0x00000f35" >> boot.cmd
 fi
 

@@ -12,6 +12,7 @@ root@bsms:/etc# cat modules
 # Parameters can be specified after the module name.
 gpio_sunxi
 ap6210 op_mode=2
+sunxi_cedar_mod
 
 (2) Modify the /etc/network/interface
 

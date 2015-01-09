@@ -60,6 +60,9 @@ case $board_type in
         #kernel_src_path="https://github.com/cubieboard/linux-sunxi -b cubie/sunxi-3.4"
         kernel_src_path="https://github.com/linux-sunxi/linux-sunxi.git -b sunxi-3.4"
         ;;
+    cb3-dev )
+        kernel_src_path="https://github.com/haotseng/linux-sunxi.git -b hao-dev"
+        ;;
     cb4 )
         kernel_src_path="https://github.com/cubieboard/CC-A80-kernel-source.git"
         ;;

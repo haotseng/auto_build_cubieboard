@@ -128,6 +128,16 @@ case $board_type in
             def_config=sun7i_defconfig
         fi
         ;;
+    cb3-dev )
+        # sun7i_defconfig ==> original default config for A20
+        def_config=cb3-dev_defconfig
+        if [ -f ${SCRIPT_PATH}/kernel_config/${def_config} ]; then
+            rm -rf ${kernel_dir}/arch/arm/configs/${def_config}
+            cp ${SCRIPT_PATH}/kernel_config/${def_config} ${kernel_dir}/arch/arm/configs
+        else
+            def_config=sun7i_defconfig
+        fi
+        ;;
     cb4 )
         # sun9iw1p1smp_defconfig ==> original default config for A80
         def_config=cb4_defconfig
