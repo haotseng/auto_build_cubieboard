@@ -87,7 +87,12 @@ if [ ! -x ${uboot_bin_dir}/tools/script ]; then
     echo "Error !! Can't execute  ${uboot_bin_dir}/tools/script"
     exit_process 1
 fi
-${uboot_bin_dir}/tools/script ${output_dir}/board_mele.fex
+
+cp ${uboot_bin_dir}/tools/script ${output_dir}
+cd ${output_dir}
+./script board_mele.fex
+rm -rf script
+cd ${curr_dir}
 
 if [ ! -f ${output_dir}/board_mele.bin ]; then
     echo "Error !! Can't generate ${output_dir}/board_mele.bin file "
@@ -101,7 +106,11 @@ if [ ! -x ${uboot_bin_dir}/tools/update_boot0 ]; then
     echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_boot0"
     exit_process 1
 fi
-${uboot_bin_dir}/tools/update_boot0 ${output_dir}/boot0.bin ${output_dir}/board_mele.bin SDMMC_CARD
+cp ${uboot_bin_dir}/tools/update_boot0 ${output_dir}
+cd ${output_dir}
+./update_boot0 boot0.bin board_mele.bin SDMMC_CARD
+rm -rf update_boot0
+cd ${curr_dir}
 
 #
 # Patch u-boot.bin
@@ -110,7 +119,11 @@ if [ ! -x ${uboot_bin_dir}/tools/update_uboot ]; then
     echo "Error !! Can't execute  ${uboot_bin_dir}/tools/update_uboot"
     exit_process 1
 fi
-${uboot_bin_dir}/tools/update_uboot ${output_dir}/u-boot.bin ${output_dir}/board_mele.bin
+cp ${uboot_bin_dir}/tools/update_uboot ${output_dir}
+cd ${output_dir}
+./update_uboot u-boot.bin board_mele.bin
+rm -rf update_uboot
+cd ${curr_dir}
 
 
 #
