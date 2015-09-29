@@ -7,7 +7,7 @@ Automatic build uboot, linux-kernel from source code for Cubieboards. Include fo
  
 Before you start, Some packets must be installed in you environment.
 
-    # apt-get install uboot-mkimage kpartx dosfstools dos2unix
+    # apt-get install uboot-mkimage kpartx dosfstools dos2unix device-tree-compiler
     
 And you also need ARM cross-compiler such as "arm-linux-gnueabihf-xxx" and "arm-linux-gnueabi-xxx"
 
