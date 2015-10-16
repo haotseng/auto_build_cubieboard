@@ -85,7 +85,11 @@ case "$dev_type" in
           echo "Error !! The file $target_image isn't exit";
           exit_process 1
       fi
+
       device=`kpartx -va $target_image | sed -E 's/.*(loop[0-9])p.*/\1/g' | head -1`
+      # Wait a while until the loop-device ready
+      sleep 3
+
       bootp_dmsetup_name=${device}p1
       rootp_dmsetup_name=${device}p2
       device="/dev/mapper/${device}"
