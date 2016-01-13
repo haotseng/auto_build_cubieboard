@@ -43,6 +43,7 @@ fi
 
 download_type=$1
 output_dir=$2
+release_tag=$3
 
 #
 # Choose config file
@@ -63,3 +64,6 @@ esac
 uboot_src_path="https://github.com/linux-sunxi/u-boot-sunxi"
 
 git clone $git_depth $uboot_src_path $output_dir
+if [ x$release_tag != "x" ]; then
+  (cd $output_dir; git checkout $release_tag)
+fi 
