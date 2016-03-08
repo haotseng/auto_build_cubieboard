@@ -47,7 +47,8 @@ output_dir=$3
 
 case $board_type in
     cb1 )
-        kernel_src_path="https://github.com/linux-sunxi/linux-sunxi"
+        #kernel_src_path="https://github.com/linux-sunxi/linux-sunxi"
+        kernel_src_path="https://github.com/linux-sunxi/linux-sunxi.git -b sunxi-3.4"
         ;;
     cb2 )
         #kernel_src_path="https://github.com/cubieboard2/linux-sunxi"

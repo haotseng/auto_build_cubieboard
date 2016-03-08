@@ -1,0 +1,1112 @@
+diff --git a/drivers/char/Kconfig b/drivers/char/Kconfig
+index e5f9bb5..3718224 100644
+--- a/drivers/char/Kconfig
++++ b/drivers/char/Kconfig
+@@ -631,5 +631,7 @@ config TILE_SROM
+ 
+ source "drivers/char/sunxi_g2d/Kconfig"
+ 
++source "drivers/char/sunxi_mem/Kconfig"
++
+ endmenu
+ 
+diff --git a/drivers/char/Makefile b/drivers/char/Makefile
+index c059ced..c952ab1 100644
+--- a/drivers/char/Makefile
++++ b/drivers/char/Makefile
+@@ -63,6 +63,7 @@ obj-$(CONFIG_RAMOOPS)		+= ramoops.o
+ 
+ obj-$(CONFIG_JS_RTC)		+= js-rtc.o
+ obj-$(CONFIG_SUNXI_G2D) += sunxi_g2d/
++obj-$(CONFIG_SUNXI_PHYS_MEM_ALLOCATOR)    += sunxi_mem/
+ js-rtc-y = rtc.o
+ 
+ obj-$(CONFIG_TILE_SROM)		+= tile-srom.o
+diff --git a/drivers/char/sunxi_mem/Kconfig b/drivers/char/sunxi_mem/Kconfig
+new file mode 100644
+index 0000000..c40381e
+--- /dev/null
++++ b/drivers/char/sunxi_mem/Kconfig
+@@ -0,0 +1,9 @@
++#
++# sunxi continous physic memory allocator.
++#
++
++config SUNXI_PHYS_MEM_ALLOCATOR
++	bool "sunxi continous physic memory allocator"
++	default y
++	help
++	Nothing help.
+diff --git a/drivers/char/sunxi_mem/Makefile b/drivers/char/sunxi_mem/Makefile
+new file mode 100644
+index 0000000..02c4481
+--- /dev/null
++++ b/drivers/char/sunxi_mem/Makefile
+@@ -0,0 +1,2 @@
++
++obj-$(CONFIG_SUNXI_PHYS_MEM_ALLOCATOR) += sunxi_physmem.o drv.o cache-v7.o
+diff --git a/drivers/char/sunxi_mem/cache-v7.S b/drivers/char/sunxi_mem/cache-v7.S
+new file mode 100644
+index 0000000..ae30e2d
+--- /dev/null
++++ b/drivers/char/sunxi_mem/cache-v7.S
+@@ -0,0 +1,105 @@
++
++#ifndef __ASSEMBLY__
++#define __ASSEMBLY__
++#endif
++#include <linux/linkage.h>
++#include <asm/assembler.h>
++/*
++    c code declared as follows:
++    int flush_clean_user_range2(long start, long end);
++*/
++ENTRY(flush_clean_user_range2)
++	.macro	dcache_line_size, reg, tmp
++	mrc	p15, 1, \tmp, c0, c0, 0		@ read CSIDR
++	and	\tmp, \tmp, #7			@ cache line size encoding
++	mov	\reg, #16			@ size offset
++	mov	\reg, \reg, lsl \tmp		@ actual cache line size
++	.endm
++
++    .text
++    .globl flush_clean_user_range2
++flush_clean_user_range2:
++    dcache_line_size r2, r3
++    sub	r3, r2, #1
++    bic	r0, r0, r3
++1:
++    USER(	mcr	p15, 0, r0, c7, c14, 1	)	@ clean and flush D line to the point of unification
++    add	r0, r0, r2
++2:
++    cmp	r0, r1
++    blo	1b
++    mov	r0, #0
++    dsb
++    mov	pc, lr
++
++/*
++ * Fault handling for the cache operation above. If the virtual address in r0
++ * isn't mapped, just try the next page.
++ */
++9001:
++    mov	r0, r0, lsr #12
++    mov	r0, r0, lsl #12
++    add	r0, r0, #4096
++    b	2b
++ENDPROC(flush_clean_user_range2)
++
++/*
++ *	flush_dcache_all()
++ *
++ *	Flush the whole D-cache.
++ *
++ *	Corrupted registers: r0-r7, r9-r11 (r6 only in Thumb mode)
++ *
++ *	- mm    - mm_struct describing address space
++ */
++ENTRY(flush_dcache_all)
++	stmfd	sp!, {r0 - r12, lr}
++	dmb					@ ensure ordering with previous memory accesses
++	mrc	p15, 1, r0, c0, c0, 1		@ read clidr
++	ands	r3, r0, #0x7000000		@ extract loc from clidr
++	mov	r3, r3, lsr #23			@ left align loc bit field
++	beq	finished			@ if loc is 0, then no need to clean
++	mov	r10, #0				@ start clean at cache level 0
++loop1:
++	add	r2, r10, r10, lsr #1		@ work out 3x current cache level
++	mov	r1, r0, lsr r2			@ extract cache type bits from clidr
++	and	r1, r1, #7			@ mask of the bits for current cache only
++	cmp	r1, #2				@ see what cache we have at this level
++	blt	skip				@ skip if no cache, or just i-cache
++	mcr	p15, 2, r10, c0, c0, 0		@ select current cache level in cssr
++	isb					@ isb to sych the new cssr&csidr
++	mrc	p15, 1, r1, c0, c0, 0		@ read the new csidr
++	and	r2, r1, #7			@ extract the length of the cache lines
++	add	r2, r2, #4			@ add 4 (line length offset)
++	ldr	r4, =0x3ff
++	ands	r4, r4, r1, lsr #3		@ find maximum number on the way size
++	clz	r5, r4				@ find bit position of way size increment
++	ldr	r7, =0x7fff
++	ands	r7, r7, r1, lsr #13		@ extract max number of the index size
++loop2:
++	mov	r9, r4				@ create working copy of max way size
++loop3:
++ ARM(	orr	r11, r10, r9, lsl r5	)	@ factor way and cache number into r11
++ THUMB(	lsl	r6, r9, r5		)
++ THUMB(	orr	r11, r10, r6		)	@ factor way and cache number into r11
++ ARM(	orr	r11, r11, r7, lsl r2	)	@ factor index number into r11
++ THUMB(	lsl	r6, r7, r2		)
++ THUMB(	orr	r11, r11, r6		)	@ factor index number into r11
++	mcr	p15, 0, r11, c7, c14, 2		@ clean & invalidate by set/way
++	subs	r9, r9, #1			@ decrement the way
++	bge	loop3
++	subs	r7, r7, #1			@ decrement the index
++	bge	loop2
++skip:
++	add	r10, r10, #2			@ increment cache number
++	cmp	r3, r10
++	bgt	loop1
++finished:
++	mov	r10, #0				@ swith back to cache level 0
++	mcr	p15, 2, r10, c0, c0, 0		@ select current cache level in cssr
++	dsb
++	isb
++
++	ldmfd	sp!, {r0 - r12, lr}
++	mov	pc, lr
++ENDPROC(flush_dcache_all)
+diff --git a/drivers/char/sunxi_mem/drv.c b/drivers/char/sunxi_mem/drv.c
+new file mode 100644
+index 0000000..ba45853
+--- /dev/null
++++ b/drivers/char/sunxi_mem/drv.c
+@@ -0,0 +1,424 @@
++/*
++ * drivers/char/sunxi_mem/drv.c
++ * (C) Copyright 2010-2015
++ * Reuuimlla Technology Co., Ltd. <www.reuuimllatech.com>
++ * liugang <liugang@reuuimllatech.com>
++ *
++ * sunxi physical memory allocator driver
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ */
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/errno.h>
++#include <linux/slab.h>
++#include <linux/mm_types.h>
++#include <linux/cdev.h>
++#include <linux/platform_device.h>
++#include <linux/sunxi_physmem.h>
++#include <asm/uaccess.h>
++#include <linux/slab.h>
++#include <linux/fs.h>
++#include <linux/mm.h>
++
++#include <mach/includes.h>
++#include "sunxi_physmem_i.h"
++#include <linux/sunxi_physmem.h>
++
++static struct cdev 	*g_cdev = NULL;
++static dev_t 		g_devid = -1;
++static struct class 	*g_class = NULL;
++struct device 		*g_dev = NULL;
++struct kmem_cache 	*g_pmem_cache = NULL; /* mem cache for struct sunxi_mem_des */
++
++/* flush cache api from cache-v7.S */
++extern int flush_dcache_all(void);
++extern int flush_clean_user_range2(long start, long end);
++
++/*
++ * to sync sunmm_release and sunmm_ioctl, repetitive with SUNMM_LOCK, but any other better way?
++ */
++static DEFINE_MUTEX(sunmm_mutex);
++
++int sunmm_mmap(struct file *file, struct vm_area_struct * vma)
++{
++	SXM_DBG("%s, vm_start 0x%08x, vm_end 0x%08x, vm_pgoff 0x%08x, vm_page_prot 0x%08x\n",
++		__func__, (u32)vma->vm_start, (u32)vma->vm_end, (u32)vma->vm_pgoff, (u32)vma->vm_page_prot);
++
++	//vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot); /* NOTE: lys commit, for performance, 2012-12-3 */
++	//vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
++	if(remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
++		vma->vm_end - vma->vm_start, vma->vm_page_prot))
++		return -EAGAIN;
++
++	SXM_DBG("%s success\n", __func__);
++	return 0;
++}
++
++static int sunmm_open(struct inode *inode, struct file *file)
++{
++	struct sunxi_mem_data *pdata = NULL;
++
++	pdata = (struct sunxi_mem_data *)kmalloc(sizeof(struct sunxi_mem_data), GFP_KERNEL);
++	SUNMM_LOCK_INIT(&pdata->lock);
++	INIT_LIST_HEAD(&pdata->list);
++
++	file->private_data = (void *)pdata;
++	return 0;
++}
++
++static int sunmm_release(struct inode *inode, struct file *file)
++{
++	u32 	phys_addr = 0;
++	struct list_head *p = NULL, *n = NULL;
++	struct sunxi_mem_des *pitem = NULL;
++	struct sunxi_mem_data *pdata = NULL;
++	DEFINE_FLAGS(flags);
++
++	mutex_lock(&sunmm_mutex);
++
++	/* free the buffer if there is any */
++	pdata = (struct sunxi_mem_data *)(file->private_data);
++	if(NULL != pdata && NULL != g_pmem_cache) {
++		SUNMM_LOCK(&pdata->lock, flags);
++		list_for_each_safe(p, n, &pdata->list) {
++			pitem = list_entry(p, struct sunxi_mem_des, list);
++			phys_addr = pitem->phys_addr;
++			SXM_INF("%s: get un-freed phys_addr 0x%08x\n", __func__, phys_addr);
++			/* remove item from list */
++			list_del(&pitem->list);
++			SUNMM_UNLOCK(&pdata->lock, flags);
++
++			/* free item */
++			kmem_cache_free(g_pmem_cache, (void *)pitem);
++			/* free from reserved mem */
++			sunxi_mem_free(phys_addr);
++
++			SUNMM_LOCK(&pdata->lock, flags);
++		}
++		SUNMM_UNLOCK(&pdata->lock, flags);
++
++		kfree(pdata);
++		file->private_data = NULL;
++	}
++
++	mutex_unlock(&sunmm_mutex);
++	return 0;
++}
++
++long sunmm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
++{
++	long	ret = 0;
++	int 	temp = 0;
++	u32 	size_to_alloc = 0;
++	u32 	physaddr_to_free = 0;
++	u32 	uphysaddr = 0;
++	struct sunxi_mem_des *pdes = NULL;
++	struct sunxi_mem_data *pdata = NULL;
++	struct sunmm_cache_range cache_range = {0};
++	DEFINE_FLAGS(flags);
++
++	mutex_lock(&sunmm_mutex);
++
++	pdata = (struct sunxi_mem_data *)file->private_data;
++
++	switch(cmd) {
++	case SUNXI_MEM_ALLOC:
++		/* default return 0 indicate failed */
++		ret = 0;
++		/* check para */
++		if(NULL == pdata) {
++			SXM_ERR("%s err, line %d, private_data is NULL, cmd %d, arg %d\n", __func__,
++				__LINE__, cmd, (u32)arg);
++			goto end;
++		}
++		if(copy_from_user(&size_to_alloc, (u32 *)arg, sizeof(u32)) || NULL == g_pmem_cache) {
++			SXM_ERR("%s err, line %d, size_to_alloc 0x%08x, g_pmem_cache 0x%08x\n",
++				__func__, __LINE__, size_to_alloc, (u32)g_pmem_cache);
++			goto end;
++		}
++		SXM_DBG("%s, SUNXI_MEM_ALLOC - get size_to_alloc 0x%08x\n", __func__, size_to_alloc);
++
++		/* alloc from reserved mem */
++		uphysaddr = sunxi_mem_alloc(size_to_alloc);
++		if(0 == uphysaddr) {
++			SXM_ERR("%s err, line %d, sunxi_mem_alloc failed, size_to_alloc %d\n", __func__, __LINE__, size_to_alloc);
++			goto end;
++		}
++		/* alloc sunxi_mem_des struct */
++		pdes = (struct sunxi_mem_des *)kmem_cache_alloc(g_pmem_cache, GFP_KERNEL);
++		if(NULL == pdes) {
++			SXM_ERR("%s err, line %d, kmem_cache_alloc failed\n", __func__, __LINE__);
++			sunxi_mem_free(uphysaddr); /* release buf */
++			goto end;
++		}
++
++		/* return phys address on success */
++		ret = (long)uphysaddr;
++
++		/* add buf to list */
++		pdes->phys_addr = uphysaddr;
++		pdes->size = size_to_alloc;
++		SUNMM_LOCK(&pdata->lock, flags);
++		list_add_tail(&pdes->list, &pdata->list);
++		SUNMM_UNLOCK(&pdata->lock, flags);
++		break;
++
++	case SUNXI_MEM_FREE:
++		/* check para */
++		if(NULL == pdata) {
++			SXM_ERR("%s err, line %d, private_data is NULL, cmd %d, arg %d\n", __func__,
++				__LINE__, cmd, (u32)arg);
++			ret = -EINVAL;
++			goto end;
++		}
++		if(copy_from_user(&physaddr_to_free, (u32 *)arg, sizeof(u32)) || NULL == g_pmem_cache) {
++			SXM_ERR("%s err, line %d, physaddr_to_free %d, g_pmem_cache 0x%08x\n", __func__, __LINE__,
++				physaddr_to_free, (u32)g_pmem_cache);
++			ret = -EINVAL;
++			goto end;
++		}
++		SXM_DBG("%s, SUNXI_MEM_FREE - get physaddr_to_free 0x%08x\n", __func__, physaddr_to_free);
++
++		/* find the sunxi_mem_des struct */
++		{
++			bool 	bfind = false;
++			struct list_head *p = NULL, *n = NULL;
++			struct sunxi_mem_des *pitem = NULL;
++
++			SUNMM_LOCK(&pdata->lock, flags);
++			list_for_each_safe(p, n, &pdata->list) {
++				pitem = list_entry(p, struct sunxi_mem_des, list);
++				if(pitem->phys_addr == physaddr_to_free) {
++					/* remove item from list */
++					list_del(&pitem->list);
++					SUNMM_UNLOCK(&pdata->lock, flags);
++
++					/* free item */
++					kmem_cache_free(g_pmem_cache, (void *)pitem);
++					/* free from reserved mem */
++					sunxi_mem_free(physaddr_to_free);
++					bfind = true;
++					break;
++				}
++			}
++			if(false == bfind) {
++				SUNMM_UNLOCK(&pdata->lock, flags);
++				SXM_ERR("%s err, line %d, cannot find the allocated mem 0x%08x\n",
++					__func__, __LINE__, physaddr_to_free);
++			}
++		}
++		/* return 0 on success */
++		ret = 0;
++		break;
++
++	case SUNXI_MEM_GET_REST_SZ:
++		ret = (long)sunxi_mem_get_rest_size();
++		SXM_DBG("%s, SUNXI_MEM_GET_REST_SZ - ret 0x%08x\n", __func__, (int)ret);
++		break;
++
++	case SUNXI_MEM_FLUSH_CACHE:
++		if(copy_from_user(&cache_range, (u32 *)arg, sizeof(cache_range))) {
++			SXM_ERR("%s err, line %d\n", __func__, __LINE__);
++			ret = -EINVAL;
++			goto end;
++		}
++		SXM_DBG("%s, SUNXI_MEM_FLUSH_CACHE, start 0x%08x, end 0x%08x\n", __func__,
++			cache_range.start, cache_range.end);
++		temp = flush_clean_user_range2(cache_range.start, cache_range.end);
++		if(0 != temp) {
++			SXM_INF("%s, SUNXI_MEM_FLUSH_CACHE return %d\n", __func__, temp);
++		}
++		break;
++
++	case SUNXI_MEM_FLUSH_CACHE_ALL:
++		SXM_DBG("%s, SUNXI_MEM_FLUSH_CACHE_ALL\n", __func__);
++		temp = flush_dcache_all();
++		if(0 != temp) {
++			SXM_INF("%s, SUNXI_MEM_FLUSH_CACHE_ALL return %d\n", __func__, temp);
++		}
++		break;
++
++	default:
++		SXM_ERR_FUN_LINE;
++		ret = -EINVAL;
++		goto end;
++	}
++
++end:
++	mutex_unlock(&sunmm_mutex);
++	return ret;
++}
++
++static struct file_operations sunxi_mem_fops = {
++	.owner		= THIS_MODULE,
++	.open		= sunmm_open,
++	.release	= sunmm_release,
++	.unlocked_ioctl	= sunmm_ioctl,
++	.mmap		= sunmm_mmap,
++};
++
++static int sunmm_probe(struct platform_device *pdev)
++{
++	SXM_DBG_FUN_LINE;
++	return 0;
++}
++
++static int sunmm_remove(struct platform_device *pdev)
++{
++	SXM_DBG_FUN_LINE;
++	return 0;
++}
++
++struct platform_device sunxi_mem_device =
++{
++	.name		= "sunxi_mem",
++	.id		= -1,
++	//.num_resources  = ARRAY_SIZE(sunmm_resource),
++	//.resources	= sunmm_resource,
++};
++
++static struct platform_driver sunxi_mem_driver =
++{
++	.probe		= sunmm_probe,
++	.remove		= sunmm_remove,
++	.driver		= {
++		.name	= "sunxi_mem",
++		.owner	= THIS_MODULE,
++	},
++};
++
++/**
++ * mem_cache_ctor - init function for g_pmem_cache
++ * @p:	pointer to g_pdes_mgr
++ */
++static void mem_cache_ctor(void *p)
++{
++	struct sunxi_mem_des *pdes = (struct sunxi_mem_des *)p;
++
++	memset(pdes, 0, sizeof(struct sunxi_mem_des));
++	INIT_LIST_HEAD(&pdes->list);
++}
++
++int __init sunmm_module_init(void)
++{
++	int 	ret = 0;
++
++	SXM_DBG("%s start, line %d\n", __func__, __LINE__);
++
++	/* char device register */
++	ret = alloc_chrdev_region(&g_devid, 0, 1, "sunxi_mem");
++	if(ret) {
++		SXM_ERR_FUN_LINE;
++		return ret;
++	}
++	g_cdev = cdev_alloc();
++	if(NULL == g_cdev) {
++		SXM_ERR_FUN_LINE;
++		goto out1;
++	}
++	cdev_init(g_cdev, &sunxi_mem_fops);
++	g_cdev->owner = THIS_MODULE;
++	ret = cdev_add(g_cdev, g_devid, 1);
++	if(ret) {
++		SXM_ERR_FUN_LINE;
++		goto out2;
++	}
++
++	/* class create and device register */
++	g_class = class_create(THIS_MODULE, "sunxi_mem");
++	if(IS_ERR(g_class)) {
++		SXM_ERR_FUN_LINE;
++		goto out3;
++	}
++	g_dev = device_create(g_class, NULL, g_devid, NULL, "sunxi_mem");
++	if(IS_ERR(g_dev)) {
++		SXM_ERR_FUN_LINE;
++		goto out4;
++	}
++
++	/* platform device register */
++	ret = platform_device_register(&sunxi_mem_device);
++	if(ret) {
++		SXM_ERR_FUN_LINE;
++		goto out5;
++	}
++	ret = platform_driver_register(&sunxi_mem_driver);
++	if(ret) {
++		SXM_ERR_FUN_LINE;
++		goto out6;
++	}
++
++	/* alloc mem_des struct pool */
++	g_pmem_cache = kmem_cache_create("sunxi_mem_des_cache", sizeof(struct sunxi_mem_des), 0,
++					SLAB_HWCACHE_ALIGN, mem_cache_ctor);
++	if(NULL == g_pmem_cache) {
++		SXM_ERR_FUN_LINE;
++		goto out7;
++	}
++
++	SXM_DBG("%s success, line %d\n", __func__, __LINE__);
++	return ret;
++
++out7:
++	platform_driver_unregister(&sunxi_mem_driver);
++out6:
++	platform_device_unregister(&sunxi_mem_device);
++out5:
++	device_destroy(g_class, g_devid);
++	g_dev = NULL;
++out4:
++	class_destroy(g_class);
++	g_class = NULL;
++out3:
++	cdev_del(g_cdev);
++out2:
++	//kfree(g_cdev); /* not need? */
++	g_cdev = NULL;
++out1:
++	unregister_chrdev_region(g_devid, 1);
++	g_devid = -1;
++	return -EINVAL; /* return err */
++}
++
++void __exit sunmm_module_exit(void)
++{
++	SXM_DBG("%s start\n", __func__);
++
++	/* free mem_des struct pool */
++	if(NULL != g_pmem_cache) {
++		kmem_cache_destroy(g_pmem_cache);
++		g_pmem_cache = NULL;
++	}
++
++	/* release platform drv and device */
++	platform_driver_unregister(&sunxi_mem_driver);
++	platform_device_unregister(&sunxi_mem_device);
++
++	/* release class and  drv and device */
++	device_destroy(g_class, g_devid);
++	g_dev = NULL;
++
++	class_destroy(g_class);
++	g_class = NULL;
++
++	/* release char dev */
++	cdev_del(g_cdev);
++	//kfree(g_cdev); /* not need? */
++	g_cdev = NULL;
++
++	unregister_chrdev_region(g_devid, 1);
++	g_devid = -1;
++
++	SXM_DBG("%s end\n", __func__);
++}
++
++module_init(sunmm_module_init);
++module_exit(sunmm_module_exit);
++
+diff --git a/drivers/char/sunxi_mem/sunxi_physmem.c b/drivers/char/sunxi_mem/sunxi_physmem.c
+new file mode 100644
+index 0000000..d7e7060
+--- /dev/null
++++ b/drivers/char/sunxi_mem/sunxi_physmem.c
+@@ -0,0 +1,374 @@
++/*
++ * drivers/char/sunxi_mem/sunxi_physmem.c
++ * (C) Copyright 2010-2015
++ * Reuuimlla Technology Co., Ltd. <www.reuuimllatech.com>
++ * liugang <liugang@reuuimllatech.com>
++ *
++ * sunxi physical memory allocator driver
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ */
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/errno.h>
++#include <linux/slab.h>
++
++#include <mach/includes.h>
++#include "sunxi_physmem_i.h"
++
++#define	BUFFER_PADDR			SW_VE_MEM_BASE
++#define	BUFFER_VADDR			BUFFER_PADDR
++#define	BUFFER_SIZE			SW_VE_MEM_SIZE
++
++#define	MEMORY_GAP_MIN      0x10000
++
++#define IS_LIST_EMPTY(listh)            ((bool)((listh)->next == listh))
++#define LIST_REACH_END(listh, entry)    ((bool)(listh == entry))
++#define NEXT_PHYS_ADDR(pnode)           (pnode->phys_addr + pnode->size)
++
++#define SW_VE_MEM_BASE                    (PLAT_PHYS_OFFSET + SZ_64M)
++#define SW_VE_MEM_SIZE                    (SZ_64M)
++
++static struct sunxi_mem_allocator	*g_allocator = NULL;
++static DEFINE_SPINLOCK(sunxi_memlock);
++
++inline static void __sunxi_init_list_head(struct mem_list * listh)
++{
++	listh->next = listh->prev = listh;
++}
++
++inline static struct mem_list * __sunxi_first_node(struct mem_list * listh)
++{
++	return listh->next;
++}
++
++inline static void __sunxi_remove_node(struct mem_list * pnode)
++{
++	pnode->prev->next = pnode->next;
++	pnode->next->prev = pnode->prev;
++	pnode->next = NULL;
++	pnode->prev = NULL;
++}
++
++inline static void __sunxi_insert_node_before(struct mem_list * pnew_node, struct mem_list * pexisting_node)
++{
++	pexisting_node->prev->next = pnew_node;
++	pnew_node->prev = pexisting_node->prev;
++	pnew_node->next = pexisting_node;
++	pexisting_node->prev = pnew_node;
++}
++
++static u32 sunxi_init(struct sunxi_mem_allocator *this, u32 size, u32 va, u32 pa)
++{
++	u32	uret = 0;
++	struct mem_list * pnode;
++
++	this->normal_size = size;
++
++	this->node_free_listh = this->create_new_node(this, 0, 0, 0);
++	if(NULL == this->node_free_listh) {
++		uret = __LINE__;
++		goto end;
++	}
++	__sunxi_init_list_head(this->node_free_listh);
++
++	this->free_listh = this->create_new_node(this, 0, 0, 0);
++	if(NULL == this->free_listh) {
++		uret = __LINE__;
++		goto end;
++	}
++
++	__sunxi_init_list_head(this->free_listh);
++
++	this->inuse_listh = this->create_new_node(this, 0, 0, 0);
++	if (NULL == this->inuse_listh) {
++		uret = __LINE__;
++		goto end;
++	}
++
++	__sunxi_init_list_head(this->inuse_listh);
++
++	pnode = this->create_new_node(this, this->normal_size, va, pa);
++
++	__sunxi_insert_node_before(pnode, __sunxi_first_node(this->free_listh));
++
++end:
++	if(0 != uret)
++		SXM_ERR("%s err, line %d\n", __func__, uret);
++
++	return uret;
++}
++
++static void sunxi_deinit(struct sunxi_mem_allocator *this)
++{
++	if(NULL != this->inuse_listh) {
++		this->free_list(this, &this->inuse_listh);
++		this->inuse_listh = NULL;
++	}
++
++	if(NULL != this->free_listh) {
++		this->free_list(this, &this->free_listh);
++		this->free_listh = NULL;
++	}
++
++	if(NULL != this->node_free_listh) {
++		this->free_list(this, &this->node_free_listh);
++		this->node_free_listh = NULL;
++	}
++}
++
++static struct mem_list * sunxi_create_new_node(struct sunxi_mem_allocator *this,
++			u32 size, u32 virt_addr, u32 phys_addr)
++{
++	struct mem_list * pnode = NULL;
++
++	if((size == 0) || IS_LIST_EMPTY(this->node_free_listh))	{
++		pnode = (struct mem_list *)kmalloc(sizeof(*pnode), GFP_ATOMIC);
++		if(NULL == pnode) {
++			SXM_ERR_FUN_LINE;
++			return NULL;
++		}
++	} else {
++		pnode = __sunxi_first_node(this->node_free_listh);
++		__sunxi_remove_node(pnode);
++	}
++
++	if(pnode != NULL) {
++		pnode->virt_addr = virt_addr;
++		pnode->phys_addr = phys_addr;
++		pnode->size 	= size;
++		pnode->next 	= NULL;
++		pnode->prev	= NULL;
++	}
++
++	return pnode;
++}
++
++static bool sunxi_delete_node(struct sunxi_mem_allocator *this, struct mem_list * pnode)
++{
++	__sunxi_insert_node_before(pnode, __sunxi_first_node(this->node_free_listh));
++	return true;
++}
++
++static struct mem_list * sunxi_find_free_block(struct sunxi_mem_allocator *this, u32 size)
++{
++	struct mem_list * pnode = __sunxi_first_node(this->free_listh);
++
++	while(!LIST_REACH_END(this->free_listh, pnode))	{
++		if (size <= pnode->size) {
++			__sunxi_remove_node(pnode);
++			return (pnode);
++		}
++		pnode = pnode->next;
++	}
++
++	return (NULL);
++}
++
++static bool sunxi_add_node_to_freelist(struct sunxi_mem_allocator *this, struct mem_list * pnode)
++{
++	struct mem_list * pnode_temp = __sunxi_first_node(this->free_listh);
++
++	struct mem_list * pnode_prev = NULL;
++	struct mem_list * pnode_next = NULL;
++
++	u32 cur_paddr = pnode->phys_addr;
++	u32 next_paddr = NEXT_PHYS_ADDR(pnode);
++
++	while(!LIST_REACH_END(this->free_listh, pnode_temp)) {
++		if(cur_paddr == NEXT_PHYS_ADDR(pnode_temp))
++			pnode_prev = pnode_temp;
++		else if(next_paddr == pnode_temp->phys_addr)
++			pnode_next = pnode_temp;
++
++		if((pnode_prev == NULL) || (pnode_next == NULL))
++			pnode_temp = pnode_temp->next;
++		else
++			break;
++	}
++
++	if(pnode_prev != NULL)	{
++		__sunxi_remove_node(pnode_prev);
++
++		pnode->size = pnode->size + pnode_prev->size;
++		pnode->virt_addr = pnode_prev->virt_addr;
++		pnode->phys_addr = pnode_prev->phys_addr;
++		this->delete_node(this, pnode_prev);
++	}
++
++	if(pnode_next != NULL) {
++		__sunxi_remove_node(pnode_next);
++
++		pnode->size = pnode->size + pnode_next->size;
++		this->delete_node(this, pnode_next);
++	}
++
++	pnode_temp = __sunxi_first_node(this->free_listh);
++
++	while(!LIST_REACH_END(this->free_listh, pnode_temp)) {
++		if(pnode->size <= pnode_temp->size)
++			break;
++		pnode_temp = pnode_temp->next;
++	}
++
++	__sunxi_insert_node_before(pnode, pnode_temp);
++	return true;
++}
++
++static bool sunxi_free_list(struct sunxi_mem_allocator *this, struct mem_list **pphead)
++{
++	struct mem_list * pcur;
++	struct mem_list * pnext;
++
++	if(*pphead != NULL) {
++		pcur = (*pphead)->next;
++		while(pcur != *pphead) {
++			pnext = pcur->next;
++			kfree(pcur);
++			pcur = pnext;
++		}
++		kfree(*pphead);
++		*pphead = NULL;
++	}
++
++	return true;
++}
++
++bool sunxi_allocate(struct sunxi_mem_allocator *this, const u32 size_to_alloc,
++		u32* const pvirt_adr, u32* const pphy_adr)
++{
++	u32 	size;
++	struct mem_list *pnode = NULL;
++
++	size = (size_to_alloc + (MEMORY_GAP_MIN - 1)) & (~(MEMORY_GAP_MIN - 1));
++	pnode = this->find_free_block(this, size);
++	if(pnode == NULL)
++		return false;
++
++	if(pnode->size - size >= MEMORY_GAP_MIN) {
++		struct mem_list * pnew_node = this->create_new_node(this,
++					pnode->size - size,
++					pnode->virt_addr + size,
++					pnode->phys_addr + size);
++		this->add_node_to_freelist(this, pnew_node);
++
++		pnode->size = size;
++	}
++
++	__sunxi_insert_node_before(pnode, __sunxi_first_node(this->inuse_listh));
++	this->normal_size -= size;
++
++	*pvirt_adr = pnode->virt_addr;
++	*pphy_adr = pnode->phys_addr;
++	return true;
++}
++
++void sunxi_free(struct sunxi_mem_allocator *this, const u32 virtAddr, const u32 physAddr)
++{
++	u32 dwsize;
++
++	struct mem_list * pnode = __sunxi_first_node(this->inuse_listh);
++
++	while(!LIST_REACH_END(this->inuse_listh, pnode)) {
++		if((pnode->virt_addr ==  virtAddr) &&
++			(pnode->phys_addr ==  physAddr)) {
++			dwsize = pnode->size;
++			__sunxi_remove_node(pnode);
++			this->add_node_to_freelist(this, pnode);
++			this->normal_size += dwsize;
++			return;
++		}
++		pnode = pnode->next;
++	}
++}
++
++int __init sunxi_mem_allocator_init(void)
++{
++	u32 	buf_size = BUFFER_SIZE;
++	u32 	buf_vaddr = BUFFER_VADDR;
++	u32 	buf_paddr = BUFFER_PADDR;
++
++	g_allocator = kmalloc(sizeof(struct sunxi_mem_allocator), GFP_KERNEL);
++	if(NULL == g_allocator) {
++		SXM_ERR("%s err: out of memory, line %d\n", __func__, __LINE__);
++		return -ENOMEM;
++	}
++
++	g_allocator->init 	= sunxi_init;
++	g_allocator->deinit 	= sunxi_deinit;
++	g_allocator->allocate 	= sunxi_allocate;
++	g_allocator->free 	= sunxi_free;
++
++	g_allocator->add_node_to_freelist = sunxi_add_node_to_freelist;
++	g_allocator->delete_node 	= sunxi_delete_node;
++	g_allocator->create_new_node 	= sunxi_create_new_node;
++	g_allocator->find_free_block 	= sunxi_find_free_block;
++	g_allocator->free_list 		= sunxi_free_list;
++
++	if(0 != g_allocator->init(g_allocator, buf_size, buf_vaddr, buf_paddr)) {
++		SXM_ERR("%s err, line %d, size 0x%08x, vaddr 0x%08x, paddr 0x%08x\n",
++			__func__, __LINE__, buf_size, buf_vaddr, buf_paddr);
++		return -ENOMEM;
++	}
++
++	SXM_DBG("%s success, line %d\n", __func__, __LINE__);
++	return 0;
++}
++arch_initcall(sunxi_mem_allocator_init);
++
++//bool sunxi_mem_alloc(u32 size, u32* virmem, u32* phymem)
++unsigned int sunxi_mem_alloc(unsigned int size)
++{
++	u32	vtemp = 0, ptemp = 0;
++	unsigned long	flags;
++
++	spin_lock_irqsave(&sunxi_memlock, flags);
++	if(NULL != g_allocator) {
++		if(false == g_allocator->allocate(g_allocator, size, &vtemp, &ptemp)) {
++			SXM_ERR("%s err, line %d, allocate failed!\n", __func__, __LINE__);
++			ptemp = 0;
++		}
++	} else
++		SXM_ERR("%s err, line %d, g_allocator not initailized yet!\n", __func__, __LINE__);
++	spin_unlock_irqrestore(&sunxi_memlock, flags);
++
++	SXM_DBG("%s: size 0x%08x, ret 0x%08x!\n", __func__, size, ptemp);
++	return ptemp;
++}
++EXPORT_SYMBOL(sunxi_mem_alloc);
++
++//void sunxi_mem_free(u32 virmem, u32 phymem)
++void sunxi_mem_free(unsigned int phymem)
++{
++	u32	vtemp = phymem; /* to check */
++	unsigned long	flags;
++
++	SXM_DBG("%s: phymem 0x%08x!\n", __func__, phymem);
++
++	spin_lock_irqsave(&sunxi_memlock, flags);
++	if(NULL != g_allocator)
++		g_allocator->free(g_allocator, vtemp, phymem);
++	spin_unlock_irqrestore(&sunxi_memlock, flags);
++}
++EXPORT_SYMBOL(sunxi_mem_free);
++
++u32 sunxi_mem_get_rest_size(void)
++{
++	u32 	ret = 0;
++	unsigned long	flags;
++
++	spin_lock_irqsave(&sunxi_memlock, flags);
++	if(NULL != g_allocator)
++		ret = g_allocator->normal_size;
++	spin_unlock_irqrestore(&sunxi_memlock, flags);
++
++	return ret;
++}
++EXPORT_SYMBOL(sunxi_mem_get_rest_size);
++
+diff --git a/drivers/char/sunxi_mem/sunxi_physmem_i.h b/drivers/char/sunxi_mem/sunxi_physmem_i.h
+new file mode 100644
+index 0000000..66d0e57
+--- /dev/null
++++ b/drivers/char/sunxi_mem/sunxi_physmem_i.h
+@@ -0,0 +1,96 @@
++/*
++ * drivers/char/sunxi_mem/sunxi_physmem_i.h
++ * (C) Copyright 2010-2015
++ * Reuuimlla Technology Co., Ltd. <www.reuuimllatech.com>
++ * liugang <liugang@reuuimllatech.com>
++ *
++ * sunxi physical memory allocator head file
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ */
++
++#ifndef __SUNXI_PHYSMEM_I_H
++#define __SUNXI_PHYSMEM_I_H
++
++#include <linux/spinlock.h>
++
++/*
++ * sxm print macro
++ */
++#define SXM_DBG_LEVEL	3
++
++#if (SXM_DBG_LEVEL == 1)
++	#define SXM_DBG(format,args...)   printk("[sxm-dbg] "format,##args)
++	#define SXM_INF(format,args...)   printk("[sxm-inf] "format,##args)
++	#define SXM_ERR(format,args...)   printk("[sxm-err] "format,##args)
++#elif (SXM_DBG_LEVEL == 2)
++	#define SXM_DBG(format,args...)
++	#define SXM_INF(format,args...)   printk("[sxm-inf] "format,##args)
++	#define SXM_ERR(format,args...)   printk("[sxm-err] "format,##args)
++#elif (SXM_DBG_LEVEL == 3)
++	#define SXM_DBG(format,args...)
++	#define SXM_INF(format,args...)
++	#define SXM_ERR(format,args...)   printk("[sxm-err] "format,##args)
++#endif
++
++#define SXM_DBG_FUN_LINE_TODO		printk("%s, line %d, todo############\n", __func__, __LINE__)
++#define SXM_DBG_FUN_LINE 		printk("%s, line %d\n", __func__, __LINE__)
++#define SXM_ERR_FUN_LINE 		printk("%s err, line %d\n", __func__, __LINE__)
++
++#if 0
++#define DEFINE_FLAGS(x)			do{}while(0)
++#define SUNMM_LOCK_INIT(lock)		do{}while(0)
++#define SUNMM_LOCK(lock, flag)		do{}while(0)
++#define SUNMM_UNLOCK(lock, flag)	do{}while(0)
++#else
++#define DEFINE_FLAGS(x)			unsigned long x
++#define SUNMM_LOCK_INIT(lock)		spin_lock_init((lock))
++#define SUNMM_LOCK(lock, flag)		spin_lock_irqsave((lock), (flag))
++#define SUNMM_UNLOCK(lock, flag)	spin_unlock_irqrestore((lock), (flag))
++#endif
++
++struct mem_list {
++	u32	   	virt_addr;
++	u32	   	phys_addr;
++	u32	   	size;
++	struct mem_list *next;
++	struct mem_list *prev;
++};
++
++struct sunxi_mem_allocator {
++	u32 (*init)(struct sunxi_mem_allocator *this, u32 size, u32 va, u32 pa);
++	void (*deinit)(struct sunxi_mem_allocator *this);
++
++	bool (*allocate)(struct sunxi_mem_allocator *this, const u32 size_to_alloc,
++		u32* const pvirt_adr, u32* const pphy_adr);
++	void (*free)(struct sunxi_mem_allocator *this, const u32 virtAddr, const u32 physAddr);
++
++	bool 		(*add_node_to_freelist)(struct sunxi_mem_allocator *this, struct mem_list * pNode);
++	bool 		(*delete_node)(struct sunxi_mem_allocator *this, struct mem_list * pNode);
++	struct mem_list * (*create_new_node)(struct sunxi_mem_allocator *this, u32 size,
++					u32 virt_addr, u32 phys_addr);
++	struct mem_list * (*find_free_block)(struct sunxi_mem_allocator *this, u32 size);
++	bool 		(*free_list)(struct sunxi_mem_allocator *this, struct mem_list * *ppHead);
++
++	u32	   	normal_size;
++	struct mem_list *node_free_listh;
++	struct mem_list *free_listh;
++	struct mem_list *inuse_listh;
++};
++
++struct sunxi_mem_des {
++	u32 	phys_addr;		/* buf physical addr */
++	u32 	size;			/* buf size */
++	struct list_head list;     	/* list node */
++};
++
++struct sunxi_mem_data {
++	spinlock_t 	lock;		/* buflist lock */
++	struct list_head list;     	/* list node of sunxi_mem_des */
++};
++
++#endif /* __SUNXI_PHYSMEM_I_H */
+diff --git a/include/linux/sunxi_physmem.h b/include/linux/sunxi_physmem.h
+new file mode 100644
+index 0000000..9eea684
+--- /dev/null
++++ b/include/linux/sunxi_physmem.h
+@@ -0,0 +1,36 @@
++/*
++ * include/linux/sunxi_physmem.h
++ * (C) Copyright 2010-2015
++ * Reuuimlla Technology Co., Ltd. <www.reuuimllatech.com>
++ * liugang <liugang@reuuimllatech.com>
++ *
++ * sunxi physical memory allocator head file
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ */
++
++#ifndef __SUNXI_PHYSMEM_H
++#define __SUNXI_PHYSMEM_H
++
++#define SUNXI_MEM_ALLOC 		1
++#define SUNXI_MEM_FREE 			3 /* cannot be 2, which reserved in linux */
++#define SUNXI_MEM_GET_REST_SZ 		4
++#define SUNXI_MEM_FLUSH_CACHE 		5
++#define SUNXI_MEM_FLUSH_CACHE_ALL	6
++
++/* cache range for SUNXI_MEM_FLUSH_CACHE */
++struct sunmm_cache_range{
++	long 	start;
++	long 	end;
++};
++
++//bool sunxi_mem_alloc(u32 size, u32* phymem);
++u32 sunxi_mem_alloc(u32 size);
++void sunxi_mem_free(u32 phymem);
++u32 sunxi_mem_get_rest_size(void);
++
++#endif /* __SUNXI_PHYSMEM_H */
