@@ -20,4 +20,7 @@ And you also need ARM cross-compiler such as "arm-linux-gnueabihf-xxx" and "arm-
 
 ## Note
 
-(1) If you want to build linux kernel for CB4. It only work with ARM cross-compiler(ARMEL) version 4.6.x 
+(1) If you want to build linux kernel for CB4. It only work with ARM cross-compiler(ARMEL) version 4.6.x.
+Because the CB4 kernel source need two compiler option: ‘--min_array_alignment=4’ '--no_unaligned_access'. 
+Only ARM cross-compiler(ARMEL) 4.6.x support these two options.
+
