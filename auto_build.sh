@@ -74,7 +74,7 @@ uboot_output=${output_dir}/uboot
 extra_fw_tgz_file="${curr_dir}/extra_fw.tgz"
 kernel_src_download_type=fast
 uboot_src_download_type=full
-other_src_download_type=fast
+other_src_download_type=full
 uboot_src_release_tag=
 
 #
@@ -87,10 +87,9 @@ case $board_type in
         ;;
     cb2 )
         #extra_fw_tgz_file="no_extra_fw"
-        #uboot_src_release_tag=v2013.10-sunxi
         ;;
     cb3 )
-        uboot_src_release_tag=v2013.10-sunxi
+        #uboot_src_release_tag=v2013.10-sunxi
         ;;
     cb3-dev )
         kernel_src=${curr_dir}/dev/src/kernel_${board_type}

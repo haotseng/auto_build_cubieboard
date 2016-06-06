@@ -61,7 +61,16 @@ case $download_type in
         ;;
 esac
 
-uboot_src_path="https://github.com/linux-sunxi/u-boot-sunxi"
+# Original 
+#uboot_src_path="https://github.com/linux-sunxi/u-boot-sunxi"
+
+# Testing
+#uboot_src_path="https://github.com/linux-sunxi/u-boot-sunxi"
+#uboot_src_path="-b sunxi https://github.com/linux-sunxi/u-boot-sunxi"
+
+# Work !!
+#uboot_src_path="https://github.com/cubieboard/u-boot-sunxi"
+uboot_src_path="-b sunxi https://github.com/linux-sunxi/u-boot-sunxi"
 
 git clone $git_depth $uboot_src_path $output_dir
 if [ x$release_tag != "x" ]; then

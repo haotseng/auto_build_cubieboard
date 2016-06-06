@@ -61,5 +61,6 @@ case $download_type in
 esac
 
 tools_src_path="https://github.com/linux-sunxi/sunxi-tools"
+#tools_src_path="https://github.com/cubieboard/sunxi-tools"
 
 git clone $git_depth $tools_src_path $output_dir

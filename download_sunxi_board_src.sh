@@ -61,5 +61,6 @@ case $download_type in
 esac
 
 board_conf_src_path="https://github.com/linux-sunxi/sunxi-boards"
+#board_conf_src_path="https://github.com/cubieboard/sunxi-boards"
 
 git clone $git_depth $board_conf_src_path $output_dir
