@@ -32,7 +32,7 @@ function exit_process () {
   exit $1
 }
 
-function added_dynamic_mac_address () {
+function add_dynamic_mac_address () {
   mele_file=$1
   MAC_1="9a"
   MAC_2="9e"
@@ -60,7 +60,31 @@ function added_dynamic_mac_address () {
   mv ${mele_file}.tmp $mele_file
 }
 
-function added_cb3_wifi_gpio_settings () {
+function add_usb_wifi_param () {
+  mele_file=$1
+
+  #
+  # Remove below lines form $mele_file
+  # [usb_wifi_para]
+  # usb_wifi_used = 1
+  # usb_wifi_usbc_num  = 2
+  cat $mele_file | sed 's/\[usb_wifi_para\]//g' | sed 's/usb_wifi_used .*//g' | sed 's/usb_wifi_usbc_num .*//g' > ${mele_file}.tmp
+
+  #
+  # Append new line to $mele_file
+  #
+  cat << EOF >> ${mele_file}.tmp
+
+[usb_wifi_para]
+usb_wifi_used = 1
+usb_wifi_usbc_num  = 2
+EOF
+
+  rm -rf $mele_file
+  mv ${mele_file}.tmp $mele_file
+}
+
+function add_cb3_wifi_gpio_settings () {
   mele_file=$1
   
   #
@@ -258,10 +282,11 @@ if [ ! -f $board_mele_file ]; then
 fi
 cp $board_mele_file ${work_dir}/board_mele.fex
 
-added_dynamic_mac_address ${work_dir}/board_mele.fex
+add_dynamic_mac_address ${work_dir}/board_mele.fex
+add_usb_wifi_param ${work_dir}/board_mele.fex
 
 if [ "x$board_type" == "xcb3" ] || [ "x$board_type" == "xcb3-dev" ]; then
-    added_cb3_wifi_gpio_settings ${work_dir}/board_mele.fex
+    add_cb3_wifi_gpio_settings ${work_dir}/board_mele.fex
 fi
 
 cp ${sunxi_tool_src}/fex2bin ${work_dir}
